@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src https://script.google.com https://script.googleusercontent.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>대시보드</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="assets/css/app.css?v=20261026">
+  <script src="assets/js/auth.js?v=20261026"></script>
+</head>
+<body>
+  <header id="topbar" class="topbar"></header>
+  <main class="container">
+    <div class="page-head">
+      <h1>대시보드</h1>
+      <p class="muted">날짜 기준으로 집계하고, 취소된 예약은 빼요.</p>
+    </div>
+
+    <div class="dash-controls">
+      <div class="filter">
+        <span class="filter-label" id="presetLabel">기간</span>
+        <div class="seg" role="group" aria-labelledby="presetLabel" id="presets"></div>
+      </div>
+      <div class="filter" id="customBox" hidden>
+        <span class="filter-label">직접 선택</span>
+        <div class="range">
+          <input type="date" id="from" class="input" aria-label="시작 날짜">
+          <span class="muted">~</span>
+          <input type="date" id="to" class="input" aria-label="끝 날짜">
+        </div>
+      </div>
+      <div class="filter">
+        <span class="filter-label" id="unitLabel">단위</span>
+        <div class="seg" role="group" aria-labelledby="unitLabel" id="units"></div>
+      </div>
+    </div>
+    <p class="period-note" id="periodNote" aria-live="polite"></p>
+
+    <div id="dash" class="dash-body">
+      <div class="kpis" id="kpis"></div>
+      <div class="charts">
+        <section class="chart-card" aria-labelledby="h-rev">
+          <h2 id="h-rev">기간별 매출</h2>
+          <p class="chart-sub">요금 합계</p>
+          <div class="chart-box" id="chRevenue"></div>
+          <div id="tbRevenue"></div>
+        </section>
+        <section class="chart-card" aria-labelledby="h-cnt">
+          <h2 id="h-cnt">기간별 도착·출발 건수</h2>
+          <div class="legend" id="lgCounts"></div>
+          <div class="chart-box" id="chCounts"></div>
+          <div id="tbCounts"></div>
+        </section>
+        <section class="chart-card" aria-labelledby="h-drv">
+          <h2 id="h-drv">기사별 운행 건수와 정산액</h2>
+          <p class="chart-sub">단위가 달라 두 차트로 나눠 그렸어요</p>
+          <div class="multiples">
+            <div><h3>운행 건수</h3><div class="chart-box" id="chDrvCount"></div></div>
+            <div><h3>정산액</h3><div class="chart-box" id="chDrvPay"></div></div>
+          </div>
+          <div id="tbDrivers"></div>
+        </section>
+        <section class="chart-card" aria-labelledby="h-hr">
+          <h2 id="h-hr">시간대별 예약 분포</h2>
+          <p class="chart-sub">시간 칸 기준 0~23시</p>
+          <div class="chart-box" id="chHours"></div>
+          <div id="tbHours"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script src="assets/js/config.js?v=20261026"></script>
+  <script src="assets/js/format-core.js?v=20261026"></script>
+  <script src="assets/js/schema-defaults.js?v=20261026"></script>
+  <script src="assets/js/mock-data.js?v=20261026"></script>
+  <script src="assets/js/api.js?v=20261026"></script>
+  <script src="assets/js/ui.js?v=20261026"></script>
+  <script src="assets/js/charts.js?v=20261026"></script>
+  <script src="assets/js/dashboard.js?v=20261026"></script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src https://script.google.com https://script.googleusercontent.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>로그인</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="assets/css/app.css?v=20261026">
+  <!-- #k= 자동로그인 키를 가장 먼저 읽고 주소에서 지운다 -->
+  <script src="assets/js/auth.js?v=20261026"></script>
+</head>
+<body>
+  <main class="login-wrap">
+    <section class="card login-card" aria-labelledby="appName">
+      <h1 class="login-title" id="appName">호호모빌리티 백오피스</h1>
+      <p class="muted">관리자 로그인</p>
+      <form id="loginForm" novalidate>
+        <label for="pw">비밀번호</label>
+        <input id="pw" type="password" class="input" autocomplete="current-password" maxlength="200">
+        <button type="submit" class="btn btn-primary btn-block" id="loginBtn">로그인</button>
+      </form>
+      <p id="loginMsg" class="msg msg-error" role="alert" hidden></p>
+      <p id="mockHint" class="muted small" hidden>목업 모드예요 (가짜 데이터). 비밀번호: mockadmin</p>
+    </section>
+  </main>
+  <script src="assets/js/config.js?v=20261026"></script>
+  <script src="assets/js/format-core.js?v=20261026"></script>
+  <script src="assets/js/schema-defaults.js?v=20261026"></script>
+  <script src="assets/js/mock-data.js?v=20261026"></script>
+  <script src="assets/js/api.js?v=20261026"></script>
+  <script src="assets/js/ui.js?v=20261026"></script>
+  <script src="assets/js/login.js?v=20261026"></script>
+</body>
+</html>

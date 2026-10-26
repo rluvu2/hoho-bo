@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src https://script.google.com https://script.googleusercontent.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>메시지</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="assets/css/app.css?v=20261026">
+  <script src="assets/js/auth.js?v=20261026"></script>
+</head>
+<body>
+  <header id="topbar" class="topbar"></header>
+  <main class="container">
+    <div class="page-head">
+      <h1>메시지</h1>
+      <p class="muted">예약마다 안내 문구를 만들어 복사해요. 기사 배정·수정은 구글 시트에서 해 주세요.</p>
+    </div>
+    <div id="filters"></div>
+    <div class="msg-toolbar">
+      <label for="tpl">템플릿</label>
+      <select id="tpl" class="input"></select>
+      <label class="check-all" for="checkAll"><input type="checkbox" id="checkAll"> 전체 선택</label>
+      <span class="spacer"></span>
+      <span id="total" class="muted" aria-live="polite"></span>
+      <button type="button" class="btn btn-primary" id="copySelected" disabled>선택 복사</button>
+    </div>
+    <div id="cards" class="cards"></div>
+  </main>
+
+  <script src="assets/js/config.js?v=20261026"></script>
+  <script src="assets/js/format-core.js?v=20261026"></script>
+  <script src="assets/js/schema-defaults.js?v=20261026"></script>
+  <script src="assets/js/mock-data.js?v=20261026"></script>
+  <script src="assets/js/api.js?v=20261026"></script>
+  <script src="assets/js/ui.js?v=20261026"></script>
+  <script src="assets/js/filters.js?v=20261026"></script>
+  <script src="assets/js/messages.js?v=20261026"></script>
+</body>
+</html>
