@@ -97,17 +97,36 @@
   function load() {
     var seq = ++state.seq;
     var dash = $('dash');
-    if (state.loaded) dash.classList.add('is-stale'); // 이전 그림을 흐리게 유지 (깜빡임 없음)
-    else UI.loading($('kpis'), '집계하는 중…');
-    $('periodNote').textContent = shortRange(state.from, state.to) + ' 집계 중…';
-    Api.call('dashboard.get', { from: state.from, to: state.to, unit: state.unit }).then(function (d) {
+    var fresh = $('fresh');
+    var req = { from: state.from, to: state.to, unit: state.unit };
+    // 같은 기간·단위를 전에 봤으면 그 그림을 먼저, 아니면 이전 그림을 흐리게 유지 (깜빡임 없음)
+    var old = UI.recall('dashboard.get', req);
+    if (old) {
+      state.data = old.data;
+      state.loaded = true;
+      render(old.data);
+      UI.freshness(fresh, 'stale', old.at);
+    } else {
+      UI.freshness(fresh, '');
+      $('periodNote').textContent = shortRange(state.from, state.to) + ' 집계 중…';
+      if (!state.loaded) UI.loading($('kpis'), '집계하는 중…');
+    }
+    if (state.loaded) dash.classList.add('is-stale');
+    Api.call('dashboard.get', req).then(function (d) {
+      UI.remember('dashboard.get', req, d);
       if (seq !== state.seq) return;
       state.data = d;
       state.loaded = true;
       dash.classList.remove('is-stale');
+      UI.freshness(fresh, '');
       render(d);
     }).catch(function (err) {
       if (seq !== state.seq) return;
+      if (UI.handleAuth(err)) return;
+      if (old) {
+        UI.freshness(fresh, 'failed', old.at, load); // 전에 본 그림은 흐린 채로 둔다
+        return;
+      }
       dash.classList.remove('is-stale');
       UI.error($('kpis'), err, load);
       $('periodNote').textContent = '';

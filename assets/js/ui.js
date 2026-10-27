@@ -7,6 +7,8 @@ var UI = (function () {
 
   var SCHEMA_CACHE = 'hoho_bo_schema';
   var SCHEMA_TTL_MS = 10 * 60 * 1000;
+  var RESULT_STORE = 'hoho_bo_last';
+  var RESULT_MAX = 12; // 화면·조건별 마지막 결과 (P1·P3·P4 합쳐서)
   var SVG_NS = 'http://www.w3.org/2000/svg';
 
   function $(id) {
@@ -173,17 +175,105 @@ var UI = (function () {
     toastTimer = setTimeout(function () { t.classList.remove('is-on'); }, 2200);
   }
 
-  // ------------------------------------------------------------ 스키마 (sessionStorage 10분)
+  // ------------------------------------------------------------ 스키마 (sessionStorage)
 
-  function getSchema() {
-    try {
-      var c = JSON.parse(sessionStorage.getItem(SCHEMA_CACHE) || 'null');
-      if (c && Date.now() - c.at < SCHEMA_TTL_MS && c.mock === Api.isMock()) return Promise.resolve(c.data);
-    } catch (e) { /* 캐시 없음 */ }
+  function fetchSchema() {
     return Api.call('schema.get', {}).then(function (data) {
       try { sessionStorage.setItem(SCHEMA_CACHE, JSON.stringify({ at: Date.now(), mock: Api.isMock(), data: data })); } catch (e) { /* 무시 */ }
       return data;
     });
+  }
+
+  /** 기억한 스키마가 있으면 바로 쓰고, 10분이 지났으면 뒤에서 새로 받아 다음 화면부터 쓴다 */
+  function getSchema() {
+    var c = null;
+    try { c = JSON.parse(sessionStorage.getItem(SCHEMA_CACHE) || 'null'); } catch (e) { c = null; }
+    if (c && c.data && c.mock === Api.isMock()) {
+      if (Date.now() - c.at >= SCHEMA_TTL_MS) fetchSchema().catch(function () { /* 다음 화면에서 다시 */ });
+      return Promise.resolve(c.data);
+    }
+    return fetchSchema();
+  }
+
+  // ------------------------------------------------------------ 마지막 결과 (먼저 보여주고 바꿔치기)
+  // 고객 정보가 기기에 오래 남지 않게 탭 안(sessionStorage)에만 둔다 — 탭을 닫거나 로그아웃하면 사라진다.
+
+  /** 키 순서와 상관없는 비교용 글자 */
+  function canon(v) {
+    if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';
+    if (v && typeof v === 'object') return '{' + Object.keys(v).sort().map(function (k) { return JSON.stringify(k) + ':' + canon(v[k]); }).join(',') + '}';
+    return JSON.stringify(v === undefined ? null : v);
+  }
+
+  /** 짧은 해시 (사람마다 결과를 나누는 용도, 보안용 아님) */
+  function hashOf(s) {
+    var h = 2166136261;
+    for (var i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+    return h.toString(36);
+  }
+
+  function resultKey(action, payload) {
+    var a = Auth.get();
+    return canon({ u: a ? hashOf(a.key) : '', m: Api.isMock(), a: action, p: payload || {} });
+  }
+
+  function readResults() {
+    try {
+      var v = JSON.parse(sessionStorage.getItem(RESULT_STORE) || '[]');
+      return Array.isArray(v) ? v : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /** 같은 요청의 마지막 결과 → { data, at } | null */
+  function recall(action, payload) {
+    var k = resultKey(action, payload);
+    var hit = readResults().filter(function (x) { return x.k === k; })[0];
+    return hit ? { data: hit.data, at: hit.at } : null;
+  }
+
+  function remember(action, payload, data) {
+    var k = resultKey(action, payload);
+    var list = readResults().filter(function (x) { return x.k !== k; });
+    list.unshift({ k: k, at: Date.now(), data: data });
+    list = list.slice(0, RESULT_MAX);
+    while (list.length) {
+      try {
+        sessionStorage.setItem(RESULT_STORE, JSON.stringify(list));
+        return;
+      } catch (e) {
+        list.pop(); // 공간이 모자라면 오래된 것부터 버린다
+      }
+    }
+  }
+
+  function seenAt(at) {
+    var d = new Date(at);
+    var time = d.toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' });
+    return d.toDateString() === new Date().toDateString() ? time : (d.getMonth() + 1) + '/' + d.getDate() + ' ' + time;
+  }
+
+  /**
+   * 결과 옆 갱신 표시.
+   * mode 'stale': 전에 본 결과를 보여 주며 최신 값을 기다리는 중 / 'failed': 최신 값을 못 가져옴 / '': 숨김
+   */
+  function freshness(node, mode, at, retry) {
+    clear(node);
+    node.hidden = !mode;
+    node.className = 'fresh' + (mode === 'failed' ? ' is-failed' : '');
+    if (!mode) return;
+    var when = seenAt(at);
+    if (mode === 'stale') {
+      node.appendChild(el('span', { class: 'spinner spinner-sm', 'aria-hidden': 'true' }));
+      node.appendChild(el('span', { text: '최신 값 확인 중 · ' + when + '에 본 화면' }));
+      return;
+    }
+    node.appendChild(el('span', { text: '⚠ 최신 값을 못 가져왔어요 · ' + when + '에 본 화면' }));
+    if (retry) node.appendChild(el('button', { type: 'button', class: 'btn btn-sm', text: '다시 시도', onclick: retry }));
   }
 
   // ------------------------------------------------------------ 복사
@@ -254,6 +344,10 @@ var UI = (function () {
     handleAuth: handleAuth,
     toast: toast,
     getSchema: getSchema,
+    canon: canon,
+    recall: recall,
+    remember: remember,
+    freshness: freshness,
     copyText: copyText,
     copyWithFeedback: copyWithFeedback
   };

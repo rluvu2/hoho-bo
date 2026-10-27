@@ -83,8 +83,14 @@ var MockApi = (function () {
     return Promise.reject({ code: code, message: message, details: null });
   }
 
+  /** 브라우저 확인(scripts/smoke.js)용 손잡이: sessionStorage hoho_bo_mock_delay(ms), hoho_bo_mock_fail(이 요청 한 번 실패) */
+  function testHook(name) {
+    try { return sessionStorage.getItem('hoho_bo_mock_' + name) || ''; } catch (e) { return ''; }
+  }
+
   function later(data) {
-    return new Promise(function (resolve) { setTimeout(function () { resolve(data); }, DELAY_MS); });
+    var ms = Number(testHook('delay')) || DELAY_MS;
+    return new Promise(function (resolve) { setTimeout(function () { resolve(data); }, ms); });
   }
 
   // ------------------------------------------------------------ 서버 흉내
@@ -248,6 +254,10 @@ var MockApi = (function () {
       return later(null).then(function () { return fail('UNAUTHORIZED', '비밀번호가 맞지 않아요'); });
     }
     if (!auth || auth.key !== ADMIN_KEY) return fail('UNAUTHORIZED', '로그인이 필요해요');
+    if (testHook('fail') === action) {
+      try { sessionStorage.removeItem('hoho_bo_mock_fail'); } catch (e) { /* 무시 */ }
+      return later(null).then(function () { return fail('SERVER_ERROR', '목업: 일부러 실패시킨 요청이에요'); });
+    }
     switch (action) {
       case 'auth.me': return later({ role: 'admin', name: '목업 관리자' });
       case 'schema.get': return later(schema());

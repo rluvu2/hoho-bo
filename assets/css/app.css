@@ -96,6 +96,14 @@ select.input { width: auto; }
 .spinner { width: 18px; height: 18px; border: 3px solid var(--line); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+.spinner-sm { width: 12px; height: 12px; border-width: 2px; flex: none; }
+
+/* 전에 본 결과를 먼저 보여 줄 때: 흐리게 + '최신 값 확인 중' 표시 */
+.fresh { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--primary-soft); color: #23497e; font-size: 12px; font-weight: 600; }
+.fresh.is-failed { background: var(--warn-soft); color: var(--warn); }
+.fresh .btn-sm { min-height: 26px; padding: 2px 8px; font-size: 12px; }
+.table-box, .cards { transition: opacity .15s; }
+.table-box.is-stale, .cards.is-stale { opacity: 0.5; pointer-events: none; }
 
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); background: #1c2129; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 50; max-width: calc(100% - 32px); }
 .toast.is-on { opacity: 1; transform: translate(-50%, 0); }
@@ -128,6 +136,7 @@ select.input { width: auto; }
 
 /* ---------------------------------------------------------------- 표 (P1) */
 .result-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 2px 10px; color: var(--muted); font-size: 14px; }
+.result-info { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; }
 .table-box { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: auto; max-height: calc(100vh - 290px); min-height: 200px; }
 table.data { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; }
 table.data th, table.data td { padding: 9px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
@@ -187,7 +196,8 @@ table.data td.id { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .seg button { border: none; background: var(--surface); padding: 8px 12px; min-height: 40px; cursor: pointer; font-weight: 600; color: var(--muted); }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button[aria-pressed="true"] { background: var(--primary-soft); color: var(--primary); }
-.period-note { color: var(--muted); font-size: 13px; margin: 0 0 12px 2px; }
+.period-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 0 0 12px 2px; }
+.period-note { color: var(--muted); font-size: 13px; margin: 0; }
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
 @media (max-width: 960px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .kpi-value.is-pair { font-size: 20px; padding: 3px 0; }

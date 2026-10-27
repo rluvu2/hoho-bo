@@ -217,6 +217,33 @@ async function main() {
     check(/원/.test(await ev('document.querySelector(".chart-tip").textContent')), '키보드 포커스 툴팁');
     await shot('06-p4-30days-week');
 
+    // ---------------------------------------------------- 다시 들어오면 전에 본 결과 먼저 → 최신 값으로 바꿔치기
+    await ev('sessionStorage.setItem("hoho_bo_mock_delay", "1500"); true'); // 응답을 늦춰 '확인 중'을 볼 수 있게
+    await go('data.html?mock=1');
+    await waitFor('document.querySelectorAll("table.data tbody tr").length > 5 && document.getElementById("tableBox").classList.contains("is-stale")', 'P1 전에 본 결과 먼저', 1200);
+    check(/최신 값 확인 중/.test(await ev('document.getElementById("fresh").textContent')), 'P1 갱신 중 표시');
+    await shot('06b-p1-stale');
+    await waitFor('document.getElementById("fresh").hidden && !document.getElementById("tableBox").classList.contains("is-stale")', 'P1 최신 값으로 바꿈', 5000);
+
+    await go('messages.html?mock=1');
+    await waitFor('(document.querySelector(".mcard") || document.querySelector("#cards .state p")) && document.getElementById("cards").classList.contains("is-stale") && !document.getElementById("fresh").hidden', 'P3 전에 본 결과 먼저', 1200);
+    check(await ev('document.getElementById("copySelected").disabled && document.getElementById("checkAll").disabled && [...document.querySelectorAll(".mcard .btn, .mcard input")].every(function(b){return b.disabled})'), 'P3 옛 결과에서는 선택·복사 막힘');
+    await waitFor('document.getElementById("fresh").hidden && !document.getElementById("cards").classList.contains("is-stale") && !document.getElementById("checkAll").disabled', 'P3 최신 값으로 바꿈', 5000);
+
+    await go('dashboard.html?mock=1');
+    await waitFor('document.querySelectorAll(".kpi").length === 8 && document.getElementById("dash").classList.contains("is-stale") && !document.getElementById("fresh").hidden', 'P4 전에 본 결과 먼저', 1200);
+    await waitFor('document.getElementById("fresh").hidden && !document.getElementById("dash").classList.contains("is-stale")', 'P4 최신 값으로 바꿈', 5000);
+
+    // 최신 값을 못 가져오면: 전에 본 표는 흐린 채로 두고 '못 가져왔어요' + 다시 시도
+    await ev('sessionStorage.setItem("hoho_bo_mock_delay", "300"); sessionStorage.setItem("hoho_bo_mock_fail", "data.query"); true');
+    await go('data.html?mock=1');
+    await waitFor('document.getElementById("fresh").classList.contains("is-failed")', 'P1 최신 값 실패 표시', 5000);
+    check(await ev('document.querySelectorAll("table.data tbody tr").length > 5 && document.getElementById("tableBox").classList.contains("is-stale")'), '실패해도 전에 본 표는 흐린 채로 남음');
+    await shot('06c-p1-failed');
+    await click('#fresh button');
+    await waitFor('document.getElementById("fresh").hidden && !document.getElementById("tableBox").classList.contains("is-stale") && document.querySelectorAll("table.data tbody tr").length > 5', 'P1 다시 시도', 5000);
+    await ev('sessionStorage.removeItem("hoho_bo_mock_delay"); true');
+
     // ---------------------------------------------------- 자동로그인 링크·로그아웃
     await ev('localStorage.clear(); true');
     await go('index.html?mock=1#k=mock-key-admin-0000000000000000');
@@ -227,6 +254,7 @@ async function main() {
     await ev('[...document.querySelectorAll(".topbar button")].find(function(b){return b.textContent==="로그아웃"}).click(); true');
     await waitFor('/index\\.html/.test(location.pathname)', '로그아웃');
     check(!(await ev('localStorage.getItem("hoho_bo_auth")')), '로그아웃하면 저장값 삭제');
+    check(!(await ev('sessionStorage.getItem("hoho_bo_last")')), '로그아웃하면 전에 본 결과도 삭제');
     await go('index.html?mock=1#k=wrong-key-000000000000000000');
     await waitFor('!document.getElementById("loginMsg").hidden', '틀린 링크 안내');
 

@@ -10,17 +10,17 @@
   var el = UI.el;
   var $ = UI.$;
   var PAGE_SIZE = 50;
-  var state = { schema: null, filters: {}, sort: null, page: 1, seq: 0, res: null, types: {} };
+  var state = { schema: null, filters: {}, sort: null, page: 1, seq: 0, res: null, types: {}, staleAt: 0 };
   var box = $('tableBox');
+  var fresh = $('fresh');
 
   // 첫 화면: 필터가 비어 있는 기본값이라 스키마를 기다리지 않고 데이터도 동시에 요청한다
-  UI.loading(box, '불러오는 중…');
+  var first = { filters: { q: '', select: {}, range: {} }, sort: null, page: 1, pageSize: PAGE_SIZE, view: 'p1' };
   var seq = ++state.seq;
-  Promise.all([
-    UI.getSchema(),
-    Api.call('data.query', { filters: { q: '', select: {}, range: {} }, sort: null, page: 1, pageSize: PAGE_SIZE, view: 'p1' })
-  ]).then(function (out) {
-    var sc = out[0];
+  state.filters = first.filters;
+  if (!showFirst(UI.recall('data.query', first))) UI.loading(box, '불러오는 중…');
+  // 필터 막대는 스키마만 오면 바로 (기억한 스키마면 즉시) — 데이터를 기다리다 화면이 밀리지 않게
+  var schemaReady = UI.getSchema().then(function (sc) {
     state.schema = sc;
     sc.fields.forEach(function (f) { state.types[f.label] = f.type; });
     var bar = Filters.create($('filters'), sc, {
@@ -32,25 +32,62 @@
       }
     });
     state.filters = bar.get();
-    if (seq !== state.seq) return;
-    state.res = out[1];
-    render(out[1]);
-  }).catch(function (err) {
-    UI.error(box, err, function () { location.reload(); });
+    return sc;
   });
+  Promise.all([schemaReady, Api.call('data.query', first)]).then(function (out) {
+    UI.remember('data.query', first, out[1]);
+    if (seq !== state.seq) return;
+    done(out[1]);
+  }).catch(function (err) {
+    if (seq !== state.seq) return;
+    fail(err, function () { location.reload(); });
+  });
+
+  /** 전에 본 같은 결과가 있으면 흐리게 먼저 보여 준다 (없으면 불러오는 중) */
+  function showFirst(old) {
+    if (!old) {
+      state.staleAt = 0;
+      box.classList.remove('is-stale');
+      UI.freshness(fresh, '');
+      return false;
+    }
+    state.staleAt = old.at;
+    render(old.data);
+    box.classList.add('is-stale');
+    UI.freshness(fresh, 'stale', old.at);
+    return true;
+  }
+
+  function done(res) {
+    state.res = res;
+    state.staleAt = 0;
+    box.classList.remove('is-stale');
+    UI.freshness(fresh, '');
+    render(res);
+  }
+
+  /** 옛 결과를 보여 주는 중이면 그대로 두고 '못 가져왔어요'만, 아니면 오류 화면 */
+  function fail(err, retry) {
+    if (UI.handleAuth(err)) return;
+    if (state.staleAt) UI.freshness(fresh, 'failed', state.staleAt, retry);
+    else UI.error(box, err, retry);
+  }
 
   function load() {
     var seq = ++state.seq;
-    UI.loading(box);
-    $('total').textContent = '';
-    UI.clear($('pager'));
-    Api.call('data.query', { filters: state.filters, sort: state.sort, page: state.page, pageSize: PAGE_SIZE, view: 'p1' }).then(function (res) {
+    var req = { filters: state.filters, sort: state.sort, page: state.page, pageSize: PAGE_SIZE, view: 'p1' };
+    if (!showFirst(UI.recall('data.query', req))) {
+      UI.loading(box);
+      $('total').textContent = '';
+      UI.clear($('pager'));
+    }
+    Api.call('data.query', req).then(function (res) {
+      UI.remember('data.query', req, res);
       if (seq !== state.seq) return;
-      state.res = res;
-      render(res);
+      done(res);
     }).catch(function (err) {
       if (seq !== state.seq) return;
-      UI.error(box, err, load);
+      fail(err, load);
     });
   }
 

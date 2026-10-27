@@ -13,42 +13,65 @@
   var TPL_STORE = 'hoho_bo_template';
   // 이 칸이 비어 있으면 "시트에서 기사를 배정해 주세요" (필드 이름이 바뀌면 여기만)
   var DRIVER_LABELS = ['기사', '기사 연락처', '차종', '차량번호'];
-  var state = { schema: null, templates: [], vars: {}, rows: [], seq: 0, selected: {}, filters: {} };
+  // busy: 최신 값을 기다리는 중, staleAt: 전에 본 결과를 보여 주는 중(그 결과를 받은 시각)
+  var state = { schema: null, templates: [], vars: {}, rows: [], seq: 0, selected: {}, filters: {}, busy: true, staleAt: 0 };
   var cards = $('cards');
+  var fresh = $('fresh');
 
   // 첫 화면: 기본 필터를 공개 초기값(SchemaDefaults)으로 짐작해 데이터도 동시에 요청한다.
   // 실제 스키마로 만든 기본 필터가 짐작과 같으면 그 결과를 쓰고, 다르면 다시 요청한다.
+  // 전에 본 같은 결과와 템플릿이 있으면 흐리게 먼저 보여 준다 (복사는 최신 값이 온 뒤에).
   var guess = defaultsFor({
     fields: SchemaDefaults.fields,
     filterOptions: { '상태': (SchemaDefaults.fields.filter(function (f) { return f.label === '상태'; })[0] || { options: [] }).options }
   });
+  var first = { filters: guess, view: 'p3', page: 1, pageSize: MAX_ROWS };
   var seq = ++state.seq;
-  var guessReq = Api.call('data.query', { filters: guess, view: 'p3', page: 1, pageSize: MAX_ROWS });
+  var guessReq = Api.call('data.query', first);
   guessReq.catch(function () { /* 짐작이 틀리면 쓰지 않으니 여기서 실패해도 그대로 둔다 */ });
+  var tplReq = Api.call('messages.templates', {});
+  tplReq.catch(function () { /* 아래에서 처리 */ });
+
+  $('tpl').addEventListener('change', function () {
+    try { localStorage.setItem(TPL_STORE, currentTemplate() ? currentTemplate().name : ''); } catch (e) { /* 무시 */ }
+    if (!state.busy || state.staleAt) renderCards();
+  });
 
   UI.loading(cards, '불러오는 중…');
-  Promise.all([UI.getSchema(), Api.call('messages.templates', {})]).then(function (out) {
-    state.schema = out[0];
-    state.templates = out[1].templates || [];
-    state.vars = out[1].vars || {};
-    setupTemplates();
-    var bar = Filters.create($('filters'), state.schema, {
-      defaults: defaultsFor(state.schema),
+  UI.getSchema().then(function (sc) {
+    state.schema = sc;
+    var bar = Filters.create($('filters'), sc, {
+      defaults: defaultsFor(sc),
       onChange: function (v) {
         state.filters = v;
         load();
       }
     });
     state.filters = bar.get();
-    if (sameFilters(state.filters, guess)) {
-      return guessReq.then(function (res) {
-        if (seq !== state.seq) return;
-        applyResult(res);
-      });
+    var same = UI.canon(state.filters) === UI.canon(guess);
+    var oldTpl = UI.recall('messages.templates', {});
+    var oldData = UI.recall('data.query', same ? first : { filters: state.filters, view: 'p3', page: 1, pageSize: MAX_ROWS });
+    if (oldTpl && oldData && seq === state.seq) {
+      setTemplates(oldTpl.data);
+      showStale(oldData.data, Math.min(oldTpl.at, oldData.at));
     }
-    load();
+    return tplReq.then(function (tpl) {
+      UI.remember('messages.templates', {}, tpl);
+      setTemplates(tpl);
+      if (seq !== state.seq) {
+        if (!state.busy || state.staleAt) renderCards(); // 그사이 필터를 바꿨으면 템플릿만 반영
+        return null;
+      }
+      if (!same) return load();
+      return guessReq.then(function (res) {
+        UI.remember('data.query', first, res);
+        if (seq !== state.seq) return;
+        done(res);
+      });
+    });
   }).catch(function (err) {
-    UI.error(cards, err, function () { location.reload(); });
+    if (seq !== state.seq) return;
+    fail(err, function () { location.reload(); });
   });
 
   /** 기본 필터: 날짜 오늘~내일, 상태 접수·배차완료 */
@@ -66,16 +89,6 @@
     return d;
   }
 
-  /** 키 순서와 상관없이 같은 필터인지 */
-  function sameFilters(a, b) {
-    var canon = function (v) {
-      if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';
-      if (v && typeof v === 'object') return '{' + Object.keys(v).sort().map(function (k) { return JSON.stringify(k) + ':' + canon(v[k]); }).join(',') + '}';
-      return JSON.stringify(v);
-    };
-    return canon(a) === canon(b);
-  }
-
   function applyResult(res) {
     state.rows = res.rows;
     state.columns = res.columns;
@@ -84,7 +97,45 @@
     renderCards();
   }
 
-  function setupTemplates() {
+  /** 전에 본 결과를 흐리게 (선택·복사는 막는다 — 옛 내용을 고객에게 보내지 않게) */
+  function showStale(res, at) {
+    state.staleAt = at;
+    cards.classList.add('is-stale');
+    UI.freshness(fresh, 'stale', at);
+    applyResult(res);
+  }
+
+  function done(res) {
+    state.busy = false;
+    state.staleAt = 0;
+    cards.classList.remove('is-stale');
+    UI.freshness(fresh, '');
+    applyResult(res);
+  }
+
+  /** 옛 결과를 보여 주는 중이면 그대로 두고 '못 가져왔어요'만, 아니면 오류 화면 */
+  function fail(err, retry) {
+    state.busy = false;
+    if (UI.handleAuth(err)) return;
+    if (state.staleAt) {
+      UI.freshness(fresh, 'failed', state.staleAt, retry);
+    } else {
+      state.rows = [];
+      UI.error(cards, err, retry);
+    }
+    updateSelection();
+  }
+
+  /** 최신 값이 아니면 선택·복사를 막는다 */
+  function locked() {
+    return state.busy || state.staleAt > 0;
+  }
+
+  /** 템플릿 목록을 (다시) 채운다. 고른 템플릿은 이름으로 유지 */
+  function setTemplates(tpl) {
+    var keep = currentTemplate() ? currentTemplate().name : '';
+    state.templates = tpl.templates || [];
+    state.vars = tpl.vars || {};
     var sel = $('tpl');
     UI.clear(sel);
     if (!state.templates.length) {
@@ -92,14 +143,12 @@
       sel.disabled = true;
       return;
     }
-    var saved = '';
-    try { saved = localStorage.getItem(TPL_STORE) || ''; } catch (e) { saved = ''; }
+    sel.disabled = false;
+    if (!keep) {
+      try { keep = localStorage.getItem(TPL_STORE) || ''; } catch (e) { keep = ''; }
+    }
     state.templates.forEach(function (t, i) {
-      sel.appendChild(el('option', { value: String(i), text: t.name, selected: t.name === saved }));
-    });
-    sel.addEventListener('change', function () {
-      try { localStorage.setItem(TPL_STORE, currentTemplate() ? currentTemplate().name : ''); } catch (e) { /* 무시 */ }
-      renderCards();
+      sel.appendChild(el('option', { value: String(i), text: t.name, selected: t.name === keep }));
     });
   }
 
@@ -110,14 +159,26 @@
 
   function load() {
     var seq = ++state.seq;
-    UI.loading(cards);
-    $('total').textContent = '';
-    Api.call('data.query', { filters: state.filters, view: 'p3', page: 1, pageSize: MAX_ROWS }).then(function (res) {
+    var req = { filters: state.filters, view: 'p3', page: 1, pageSize: MAX_ROWS };
+    var old = UI.recall('data.query', req);
+    state.busy = true;
+    if (old) {
+      showStale(old.data, old.at);
+    } else {
+      state.staleAt = 0;
+      cards.classList.remove('is-stale');
+      UI.freshness(fresh, '');
+      UI.loading(cards);
+      $('total').textContent = '';
+      updateSelection();
+    }
+    Api.call('data.query', req).then(function (res) {
+      UI.remember('data.query', req, res);
       if (seq !== state.seq) return;
-      applyResult(res);
+      done(res);
     }).catch(function (err) {
       if (seq !== state.seq) return;
-      UI.error(cards, err, load);
+      fail(err, load);
     });
   }
 
@@ -162,7 +223,7 @@
     state.rows.forEach(function (row) {
       var msg = build(row);
       var id = row.ID;
-      var cb = el('input', { type: 'checkbox', 'aria-label': (row['이름'] || '') + ' 선택', checked: !!state.selected[id] });
+      var cb = el('input', { type: 'checkbox', 'aria-label': (row['이름'] || '') + ' 선택', checked: !!state.selected[id], disabled: locked() });
       var card = el('article', { class: 'mcard' + (state.selected[id] ? ' is-selected' : '') });
       cb.addEventListener('change', function () {
         if (cb.checked) state.selected[id] = true;
@@ -176,7 +237,7 @@
         sum.appendChild(el('dt', { text: it[0] }));
         sum.appendChild(el('dd', { text: it[1] }));
       });
-      var copyBtn = el('button', { type: 'button', class: 'btn', text: '복사', disabled: !msg.text });
+      var copyBtn = el('button', { type: 'button', class: 'btn', text: '복사', disabled: !msg.text || locked() });
       copyBtn.addEventListener('click', function () { UI.copyWithFeedback(build(row).text, '메시지를 복사했어요'); });
       card.appendChild(el('div', { class: 'mcard-head' }, [
         cb,
@@ -203,9 +264,10 @@
   function updateSelection() {
     var sel = selectedRows().length;
     var btn = $('copySelected');
-    btn.disabled = !sel || !currentTemplate();
+    btn.disabled = !sel || !currentTemplate() || locked();
     btn.textContent = sel ? '선택 복사 (' + sel + ')' : '선택 복사';
     var all = $('checkAll');
+    all.disabled = locked();
     all.checked = sel > 0 && sel === state.rows.length;
     all.indeterminate = sel > 0 && sel < state.rows.length;
   }

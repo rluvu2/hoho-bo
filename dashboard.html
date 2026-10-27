@@ -8,8 +8,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src https://script.google.com https://script.googleusercontent.com; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>대시보드</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="assets/css/app.css?v=202610271156">
-  <script src="assets/js/auth.js?v=202610271156"></script>
+  <link rel="stylesheet" href="assets/css/app.css?v=202610271554">
+  <script src="assets/js/auth.js?v=202610271554"></script>
 </head>
 <body>
   <header id="topbar" class="topbar"></header>
@@ -37,7 +37,10 @@
         <div class="seg" role="group" aria-labelledby="unitLabel" id="units"></div>
       </div>
     </div>
-    <p class="period-note" id="periodNote" aria-live="polite"></p>
+    <div class="period-row">
+      <p class="period-note" id="periodNote" aria-live="polite"></p>
+      <span id="fresh" class="fresh" role="status" hidden></span>
+    </div>
 
     <div id="dash" class="dash-body">
       <div class="kpis" id="kpis"></div>
@@ -73,13 +76,13 @@
     </div>
   </main>
 
-  <script src="assets/js/config.js?v=202610271156"></script>
-  <script src="assets/js/format-core.js?v=202610271156"></script>
-  <script src="assets/js/schema-defaults.js?v=202610271156"></script>
-  <script src="assets/js/mock-data.js?v=202610271156"></script>
-  <script src="assets/js/api.js?v=202610271156"></script>
-  <script src="assets/js/ui.js?v=202610271156"></script>
-  <script src="assets/js/charts.js?v=202610271156"></script>
-  <script src="assets/js/dashboard.js?v=202610271156"></script>
+  <script src="assets/js/config.js?v=202610271554"></script>
+  <script src="assets/js/format-core.js?v=202610271554"></script>
+  <script src="assets/js/schema-defaults.js?v=202610271554"></script>
+  <script src="assets/js/mock-data.js?v=202610271554"></script>
+  <script src="assets/js/api.js?v=202610271554"></script>
+  <script src="assets/js/ui.js?v=202610271554"></script>
+  <script src="assets/js/charts.js?v=202610271554"></script>
+  <script src="assets/js/dashboard.js?v=202610271554"></script>
 </body>
 </html>
