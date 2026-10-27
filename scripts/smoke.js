@@ -243,57 +243,80 @@ async function main() {
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 900, deviceScaleFactor: 1, mobile: false });
 
     // ---------------------------------------------------- P2 미리보기
-    const pad = (n) => (n < 10 ? '0' : '') + n;
-    const d = new Date(Date.now() + 9 * 3600000 + 2 * 86400000);
-    const md = (d.getUTCMonth() + 1) + '월 ' + d.getUTCDate() + '일';
-    const good = ['도착 정보 확인 요청', '', '  - 도착 날짜, 시간 : ' + md + ' 17:00', '  - 항공 편명: ke 703', '  - 인원: 2명', '  - 짐 개수: 3개',
+    const dayAfter = (n) => {
+      const d = new Date(Date.now() + 9 * 3600000 + n * 86400000);
+      return { md: (d.getUTCMonth() + 1) + '월 ' + d.getUTCDate() + '일', slash: (d.getUTCMonth() + 1) + '/' + d.getUTCDate() };
+    };
+    const good = ['도착 정보 확인 요청', '', '  - 도착 날짜, 시간 : ' + dayAfter(2).md + ' 17:00', '  - 항공 편명: ke 703', '  - 인원: 2명', '  - 짐 개수: 3개',
       '  - 이름(피케팅 네임) JOHN SMITH', '  - 연락처: +1 415 555 0100', '  - 목적지 상세 주소: 서울특별시 가상구 예시로 12'].join('\n');
+    const good2 = ['출발 정보 확인요청', '', '- 출발 날짜: ' + dayAfter(3).slash, '- 출발시간 : 오후 3시', '- 항공편명 : OZ 102', '- 인원,짐개수: 2명, 3개',
+      '- 이름(확인용): KIM YESI', '- 연락처: 010 0000 1234', '- 출발지 상세주소: 부산광역시 가상구 샘플로 34'].join('\n');
     const bad = '안녕하세요 예약 부탁드립니다\n' + good.replace(' 17:00', ' 5시') + '\n\n카시트 1개 부탁해요';
-    const setText = (t) => ev('var s=document.getElementById("src"); s.value=' + JSON.stringify(t) + '; s.dispatchEvent(new Event("input")); true');
+    const BOX = '#boxes .box';
+    const setText = (i, t) => ev('(function(){var s=document.querySelectorAll("' + BOX + ' textarea.src")[' + i + ']; s.value=' + JSON.stringify(t) + '; s.dispatchEvent(new Event("input")); return true})()');
+    const boxEv = (i, expr) => ev('(function(b){return ' + expr + '})(document.querySelectorAll("' + BOX + '")[' + i + '])');
+    const summaryIs = (cls) => 'document.getElementById("summary").classList.contains("' + cls + '")';
 
     await go('backend/preview/input.html');
     await waitFor('!document.getElementById("loginView").hidden', 'P2 로그인 화면');
     await shot('09-p2-login');
     await ev('document.getElementById("pw").value="preview1234"; document.getElementById("loginForm").requestSubmit(); true');
-    await waitFor('!document.getElementById("mainView").hidden', 'P2 메인');
+    await waitFor('!document.getElementById("mainView").hidden && document.querySelectorAll("' + BOX + '").length === 1', 'P2 메인 (빈 칸 하나)');
     check(await ev('document.querySelectorAll("#copyRow button").length === 2'), '양식 복사 버튼 2개');
-    await setText(good);
-    await waitFor('document.getElementById("status").classList.contains("ok")', '모든 칸 ✓');
-    check(!(await ev('document.getElementById("saveBtn").disabled')), '저장 버튼 켜짐');
-    check(await ev('document.getElementById("fixBtn").hidden'), '✓면 보정 버튼 숨김');
-    const rowVal = (label) => ev('[...document.querySelectorAll("#checkTable tbody tr")].filter(function(r){return r.querySelector("th").textContent===' + JSON.stringify(label) + '}).map(function(r){return r.querySelector("td.val").textContent}).join("|")');
+    check(await ev('document.getElementById("saveBtn").disabled'), '빈 화면에서는 저장 불가');
+
+    // 칸 두 개에 한 번에
+    await setText(0, good);
+    await waitFor(summaryIs('ok') + ' && document.querySelectorAll("' + BOX + '").length === 2', '답장 1 ✓, 빈 칸 자동 추가');
+    check(await boxEv(0, 'b.querySelector(".btn-warn").hidden'), '✓면 보정 버튼 숨김');
+    const rowVal = (label) => boxEv(0, '[...b.querySelectorAll(".check tbody tr")].filter(function(r){return r.querySelector("th").textContent===' + JSON.stringify(label) + '}).map(function(r){return r.querySelector("td.val").textContent}).join("|")');
     check(/^\d+월 \d+일 \([일월화수목금토]\)$/.test(await rowVal('날짜')), '확인표 날짜(요일 포함)');
     check((await rowVal('시간')) === '17:00 (오후 5:00)', '확인표 시간(오전·오후 포함)');
     check((await rowVal('연락처')) === '+1 415 555 0100', '확인표 해외 번호 그대로');
-    await shot('10-p2-ok');
+    await setText(1, good2);
+    await waitFor(summaryIs('ok') + ' && /예약 2건/.test(document.getElementById("summary").textContent) && document.querySelectorAll("' + BOX + '").length === 3', '답장 2 ✓, 예약 2건');
+    check(!(await ev('document.getElementById("saveBtn").disabled')), '모두 저장 버튼 켜짐');
+    await shot('10-p2-two-boxes');
     await click('#saveBtn');
     await waitFor('document.querySelector("#result .result-box.ok")', '저장 성공');
-    check(await ev('document.getElementById("src").value === ""'), '저장 후 입력창 비움');
-    await setText(good);
-    await waitFor('document.getElementById("status").classList.contains("ok")', '다시 ✓');
+    check(/답장 1: .*\n?[\s\S]*답장 2: /.test(await ev('document.getElementById("result").textContent')), '칸마다 ID 안내');
+    check(await ev('document.querySelectorAll("' + BOX + '").length === 1 && document.querySelector("' + BOX + ' textarea").value === ""'), '저장한 칸은 없어지고 빈 칸 하나');
+
+    // 중복 (이미 저장한 예약)
+    await setText(0, good);
+    await waitFor(summaryIs('ok'), '다시 ✓');
     await click('#saveBtn');
     await waitFor('!document.getElementById("dupModal").hidden', '중복 경고');
+    check(/답장 1 · 1번째 예약/.test(await ev('document.getElementById("dupBody").textContent')), '중복 안내에 칸 번호');
     await shot('11-p2-duplicate');
     await click('#dupConfirm');
     await waitFor('document.querySelector("#result .result-box.ok")', '그래도 저장');
-    await setText(bad);
-    await waitFor('document.getElementById("status").classList.contains("bad")', '✗ 표시');
-    check(await ev('document.getElementById("src").classList.contains("is-invalid")'), '붉은 입력창');
-    check(await ev('document.getElementById("saveBtn").disabled'), '✗면 저장 불가');
-    check(!(await ev('document.getElementById("fixBtn").hidden')), '보정 버튼');
-    check(await ev('document.querySelectorAll("#problems li").length >= 2'), '문제 줄 목록');
+
+    // 한 칸이라도 ✗ 면 모두 저장 불가
+    await setText(0, bad);
+    await waitFor(summaryIs('bad'), '✗ 표시');
+    await setText(1, good2.replace('KIM YESI', 'PARK OTHER'));
+    await waitFor('document.querySelectorAll("' + BOX + '").length === 3', '답장 2 입력');
+    check(await ev(summaryIs('bad') + ' && /답장 1번/.test(document.getElementById("summary").textContent)'), '문제 칸 번호 안내');
+    check(await boxEv(0, 'b.querySelector("textarea").classList.contains("is-invalid")'), '붉은 입력창');
+    check(await ev('document.getElementById("saveBtn").disabled'), '한 칸이라도 ✗면 저장 불가');
+    check(!(await boxEv(0, 'b.querySelector(".btn-warn").hidden')), '문제 칸에 보정 버튼');
+    check(await boxEv(0, 'b.querySelectorAll(".problems li").length >= 2'), '문제 줄 목록');
     await shot('12-p2-bad');
-    await click('#fixBtn');
+    await boxEv(0, 'b.querySelector(".btn-warn").click() || true');
     await waitFor('!document.getElementById("fixModal").hidden', '보정 비교 화면');
+    check(/답장 1/.test(await ev('document.getElementById("fixTitle").textContent')), '보정 화면에 칸 번호');
     check(await ev('document.querySelectorAll("#fixBody .diff-lines li.add").length > 0'), '줄 비교 색');
     await shot('13-p2-fix-compare');
     await click('#fixApprove');
     await waitFor('document.getElementById("fixModal").hidden', '승인');
-    check(/메모: /.test(await ev('document.getElementById("src").value')), '보정본이 입력창에 들어감');
-    check(await ev('document.getElementById("status").classList.contains("bad")'), '시간이 비어 여전히 ✗');
-    await ev('var s=document.getElementById("src"); s.value=s.value.replace(/(도착 날짜, 시간 : [^\\n]*)/, "$1 17:30"); s.dispatchEvent(new Event("input")); true');
-    await waitFor('document.getElementById("status").classList.contains("ok")', '직접 고친 뒤 ✓');
+    check(/메모: /.test(await boxEv(0, 'b.querySelector("textarea").value')), '보정본이 그 칸에 들어감');
+    check(await ev(summaryIs('bad')), '시간이 비어 여전히 ✗');
+    await boxEv(0, '(function(s){s.value=s.value.replace(/(도착 날짜, 시간 : [^\\n]*)/, "$1 17:30"); s.dispatchEvent(new Event("input")); return true})(b.querySelector("textarea"))');
+    await waitFor(summaryIs('ok'), '직접 고친 뒤 모두 ✓');
     await shot('14-p2-fixed');
+    await click('#saveBtn');
+    await waitFor('document.querySelector("#result .result-box.ok")', '두 칸 저장');
   } catch (e) {
     problems.push('진행 중단: ' + e.message);
   } finally {

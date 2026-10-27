@@ -92,37 +92,58 @@ function fakeGoogle() {
       var after = FormatCore.parse(fixed, s, opts());
       return ok({ text: fixed, before: before, after: after, changedFields: changedFields(before, after), notes: notes, dropped: dropped });
     },
+    // 여러 칸(items)을 한 번에: 한 칸이라도 문제면 아무것도 저장하지 않는다 (서버 Submit.gs 흉내)
     inputSubmit: function (key, p) {
       if (!authed(key)) return err('UNAUTHORIZED', '로그인이 필요해요');
       if (p.formatVersion !== FormatCore.VERSION) return err('VERSION', '화면을 새로고침해 주세요', { client: p.formatVersion, server: FormatCore.VERSION });
       if (reqs[p.requestId]) return ok(reqs[p.requestId]);
-      var parsed = FormatCore.parse(p.text, schema(), opts());
-      if (!parsed.ok) return err('VALIDATION', '양식에 맞지 않는 값이 있어 저장하지 않았어요', { problems: parsed.errors.map(function (e) { return e.message; }) });
-      var diffs = [];
-      parsed.records.forEach(function (rec, i) {
-        var ef = (p.expected[i] || {}).fields || {};
-        Object.keys(rec.fields).forEach(function (lb) { if (String(ef[lb]) !== rec.fields[lb].value) diffs.push({ record: i + 1, label: lb, expected: ef[lb], actual: rec.fields[lb].value }); });
+      var items = p.items || [{ text: p.text, expected: p.expected }];
+      var problems = [], diffs = [], parsedAll = [];
+      items.forEach(function (it, b) {
+        var parsed = FormatCore.parse(it.text, schema(), opts());
+        parsedAll.push(parsed);
+        if (!parsed.ok) {
+          parsed.errors.forEach(function (e) { problems.push('답장 ' + (b + 1) + ' · ' + e.message); });
+          if (!parsed.errors.length) problems.push('답장 ' + (b + 1) + ' · 칸에 문제가 있어요');
+          return;
+        }
+        parsed.records.forEach(function (rec, i) {
+          var ef = (it.expected[i] || {}).fields || {};
+          Object.keys(rec.fields).forEach(function (lb) {
+            if (String(ef[lb]) !== rec.fields[lb].value) diffs.push({ box: b + 1, record: i + 1, label: lb, expected: ef[lb], actual: rec.fields[lb].value });
+          });
+        });
       });
-      if (diffs.length || p.expected.length !== parsed.records.length) return err('MISMATCH', '화면과 서버가 읽은 값이 달라요', { diffs: diffs });
+      if (problems.length) return err('VALIDATION', '양식에 맞지 않는 값이 있어 아무것도 저장하지 않았어요', { problems: problems });
+      if (diffs.length) return err('MISMATCH', '화면과 서버가 읽은 값이 달라요', { diffs: diffs });
+      var valuesOf = function (rec) { var v = {}; Object.keys(rec.fields).forEach(function (k) { v[k] = rec.fields[k].value; }); return v; };
       var keyOf = function (v) { return [v['구분'], v['날짜'], v['시간'], String(v['이름']).toLowerCase()].join('|'); };
       if (!p.allowDuplicate) {
         var dups = [];
-        parsed.records.forEach(function (rec, i) {
-          var v = {};
-          Object.keys(rec.fields).forEach(function (k) { v[k] = rec.fields[k].value; });
-          saved.forEach(function (s) { if (keyOf(s.values) === keyOf(v)) dups.push({ record: i + 1, id: s.id, summary: { '구분': s.values['구분'], '날짜': s.values['날짜'], '시간': s.values['시간'], '이름': s.values['이름'], '상태': '접수' } }); });
+        var seen = {};
+        parsedAll.forEach(function (parsed, b) {
+          parsed.records.forEach(function (rec, i) {
+            var v = valuesOf(rec);
+            saved.forEach(function (s) { if (keyOf(s.values) === keyOf(v)) dups.push({ box: b + 1, record: i + 1, id: s.id, summary: { '구분': s.values['구분'], '날짜': s.values['날짜'], '시간': s.values['시간'], '이름': s.values['이름'], '상태': '접수' } }); });
+            if (seen[keyOf(v)]) dups.push({ box: b + 1, record: i + 1, id: '', summary: { '안내': '이번에 저장하는 글 안에 같은 예약이 또 있어요 (답장 ' + seen[keyOf(v)] + ')' } });
+            else seen[keyOf(v)] = b + 1;
+          });
         });
         if (dups.length) return err('DUPLICATE', '같은 예약이 이미 있어요. 그래도 저장할까요?', { duplicates: dups });
       }
-      var ids = parsed.records.map(function (rec) {
-        var v = {};
-        Object.keys(rec.fields).forEach(function (k) { v[k] = rec.fields[k].value; });
-        var id = FormatCore.todaySeoul().replace(/-/g, '').slice(2) + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
-        saved.push({ id: id, values: v });
-        return id;
+      var all = [];
+      var boxes = parsedAll.map(function (parsed) {
+        return {
+          ids: parsed.records.map(function (rec) {
+            var id = FormatCore.todaySeoul().replace(/-/g, '').slice(2) + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+            saved.push({ id: id, values: valuesOf(rec) });
+            all.push(id);
+            return id;
+          })
+        };
       });
-      reqs[p.requestId] = { ids: ids };
-      return ok({ ids: ids });
+      reqs[p.requestId] = { ids: all, boxes: boxes };
+      return ok(reqs[p.requestId]);
     }
   };
 
