@@ -303,18 +303,31 @@ async function main() {
     check(!(await boxEv(0, 'b.querySelector(".btn-warn").hidden')), '문제 칸에 보정 버튼');
     check(await boxEv(0, 'b.querySelectorAll(".problems li").length >= 2'), '문제 줄 목록');
     await shot('12-p2-bad');
+
+    // 칸 하나 보정: 결과가 그 칸 아래 '보정 제안'으로 펼쳐진다 (창이 아님)
     await boxEv(0, 'b.querySelector(".btn-warn").click() || true');
-    await waitFor('!document.getElementById("fixModal").hidden', '보정 비교 화면');
-    check(/답장 1/.test(await ev('document.getElementById("fixTitle").textContent')), '보정 화면에 칸 번호');
-    check(await ev('document.querySelectorAll("#fixBody .diff-lines li.add").length > 0'), '줄 비교 색');
-    await shot('13-p2-fix-compare');
-    await click('#fixApprove');
-    await waitFor('document.getElementById("fixModal").hidden', '승인');
-    check(/메모: /.test(await boxEv(0, 'b.querySelector("textarea").value')), '보정본이 그 칸에 들어감');
+    await waitFor('(function(b){var s=b.querySelector(".suggest");return s && !s.hidden && s.querySelector(".diff-lines li.add")})(document.querySelectorAll("' + BOX + '")[0])', '답장 1 보정 제안');
+    check(/답장 1/.test(await boxEv(0, 'b.querySelector(".suggest h3").textContent')), '보정 제안에 칸 번호');
+    check(await ev('!document.querySelector(".modal:not([hidden])")'), '창(모달)이 뜨지 않음');
+    await shot('13-p2-fix-inline');
+    await boxEv(0, 'b.querySelector(".suggest .btn-primary").click() || true');
+    await waitFor('(function(b){return b.querySelector(".suggest").hidden && /메모: /.test(b.querySelector("textarea").value)})(document.querySelectorAll("' + BOX + '")[0])', '승인 → 보정본이 그 칸에 들어감');
     check(await ev(summaryIs('bad')), '시간이 비어 여전히 ✗');
-    await boxEv(0, '(function(s){s.value=s.value.replace(/(도착 날짜, 시간 : [^\\n]*)/, "$1 17:30"); s.dispatchEvent(new Event("input")); return true})(b.querySelector("textarea"))');
+
+    // 문제 칸 여러 개를 한 번에 보정 → 보정 모두 승인
+    await setText(1, bad.replace('JOHN SMITH', 'LEE GAJJA'));
+    await waitFor('!document.getElementById("fixAllBtn").hidden && /\\(2\\)/.test(document.getElementById("fixAllBtn").textContent)', '문제 칸 모두 AI 보정 (2)');
+    await click('#fixAllBtn');
+    await waitFor('document.querySelectorAll("' + BOX + ' .btn-warn[disabled]").length === 2', '두 칸 동시에 보정 중', 3000);
+    await waitFor('[...document.querySelectorAll("' + BOX + ' .suggest")].filter(function(s){return !s.hidden}).length === 2', '두 칸 보정 제안');
+    await shot('14-p2-fix-all');
+    await click('#approveAllBtn');
+    await waitFor('[...document.querySelectorAll("' + BOX + ' .suggest")].every(function(s){return s.hidden})', '보정 모두 승인');
+    for (const i of [0, 1]) {
+      await boxEv(i, '(function(s){s.value=s.value.replace(/(도착 날짜, 시간 : [^\\n]*)/, "$1 17:30"); s.dispatchEvent(new Event("input")); return true})(b.querySelector("textarea"))');
+    }
     await waitFor(summaryIs('ok'), '직접 고친 뒤 모두 ✓');
-    await shot('14-p2-fixed');
+    await shot('15-p2-fixed');
     await click('#saveBtn');
     await waitFor('document.querySelector("#result .result-box.ok")', '두 칸 저장');
   } catch (e) {
