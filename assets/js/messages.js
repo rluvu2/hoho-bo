@@ -16,6 +16,16 @@
   var state = { schema: null, templates: [], vars: {}, rows: [], seq: 0, selected: {}, filters: {} };
   var cards = $('cards');
 
+  // 첫 화면: 기본 필터를 공개 초기값(SchemaDefaults)으로 짐작해 데이터도 동시에 요청한다.
+  // 실제 스키마로 만든 기본 필터가 짐작과 같으면 그 결과를 쓰고, 다르면 다시 요청한다.
+  var guess = defaultsFor({
+    fields: SchemaDefaults.fields,
+    filterOptions: { '상태': (SchemaDefaults.fields.filter(function (f) { return f.label === '상태'; })[0] || { options: [] }).options }
+  });
+  var seq = ++state.seq;
+  var guessReq = Api.call('data.query', { filters: guess, view: 'p3', page: 1, pageSize: MAX_ROWS });
+  guessReq.catch(function () { /* 짐작이 틀리면 쓰지 않으니 여기서 실패해도 그대로 둔다 */ });
+
   UI.loading(cards, '불러오는 중…');
   Promise.all([UI.getSchema(), Api.call('messages.templates', {})]).then(function (out) {
     state.schema = out[0];
@@ -23,31 +33,55 @@
     state.vars = out[1].vars || {};
     setupTemplates();
     var bar = Filters.create($('filters'), state.schema, {
-      defaults: defaults(),
+      defaults: defaultsFor(state.schema),
       onChange: function (v) {
         state.filters = v;
         load();
       }
     });
     state.filters = bar.get();
+    if (sameFilters(state.filters, guess)) {
+      return guessReq.then(function (res) {
+        if (seq !== state.seq) return;
+        applyResult(res);
+      });
+    }
     load();
   }).catch(function (err) {
     UI.error(cards, err, function () { location.reload(); });
   });
 
   /** 기본 필터: 날짜 오늘~내일, 상태 접수·배차완료 */
-  function defaults() {
+  function defaultsFor(schema) {
     var d = { q: '', select: {}, range: {} };
     var today = UI.today();
-    state.schema.fields.forEach(function (f) {
+    schema.fields.forEach(function (f) {
       if (f.p1Search === '기간' && f.type === 'date' && !Object.keys(d.range).length) {
         d.range[f.label] = { from: today, to: FormatCore.addDays(today, 1) };
       }
     });
-    var opts = (state.schema.filterOptions || {})['상태'] || [];
+    var opts = (schema.filterOptions || {})['상태'] || [];
     var want = ['접수', '배차완료'].filter(function (s) { return opts.indexOf(s) >= 0; });
     if (want.length) d.select['상태'] = want;
     return d;
+  }
+
+  /** 키 순서와 상관없이 같은 필터인지 */
+  function sameFilters(a, b) {
+    var canon = function (v) {
+      if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';
+      if (v && typeof v === 'object') return '{' + Object.keys(v).sort().map(function (k) { return JSON.stringify(k) + ':' + canon(v[k]); }).join(',') + '}';
+      return JSON.stringify(v);
+    };
+    return canon(a) === canon(b);
+  }
+
+  function applyResult(res) {
+    state.rows = res.rows;
+    state.columns = res.columns;
+    state.total = res.total;
+    state.selected = {};
+    renderCards();
   }
 
   function setupTemplates() {
@@ -80,11 +114,7 @@
     $('total').textContent = '';
     Api.call('data.query', { filters: state.filters, view: 'p3', page: 1, pageSize: MAX_ROWS }).then(function (res) {
       if (seq !== state.seq) return;
-      state.rows = res.rows;
-      state.columns = res.columns;
-      state.total = res.total;
-      state.selected = {};
-      renderCards();
+      applyResult(res);
     }).catch(function (err) {
       if (seq !== state.seq) return;
       UI.error(cards, err, load);

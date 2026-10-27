@@ -54,7 +54,8 @@ function fakeGoogle() {
 
   var FAKE = {
     inputLogin: function (pw) {
-      return String(pw).trim() === PW ? ok({ key: KEY, role: 'user', name: '미리보기 사용자' }) : err('UNAUTHORIZED', '비밀번호가 맞지 않아요 (미리보기: ' + PW + ')');
+      if (String(pw).trim() !== PW) return err('UNAUTHORIZED', '비밀번호가 맞지 않아요 (미리보기: ' + PW + ')');
+      return ok({ key: KEY, role: 'user', name: '미리보기 사용자', schema: FAKE.inputSchema(KEY).data });
     },
     inputMe: function (key) {
       return authed(key) ? ok({ role: 'user', name: '미리보기 사용자' }) : err('UNAUTHORIZED', '로그인이 풀렸어요');

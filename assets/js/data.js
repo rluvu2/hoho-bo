@@ -13,8 +13,14 @@
   var state = { schema: null, filters: {}, sort: null, page: 1, seq: 0, res: null, types: {} };
   var box = $('tableBox');
 
-  UI.loading(box, '필드 정보를 불러오는 중…');
-  UI.getSchema().then(function (sc) {
+  // 첫 화면: 필터가 비어 있는 기본값이라 스키마를 기다리지 않고 데이터도 동시에 요청한다
+  UI.loading(box, '불러오는 중…');
+  var seq = ++state.seq;
+  Promise.all([
+    UI.getSchema(),
+    Api.call('data.query', { filters: { q: '', select: {}, range: {} }, sort: null, page: 1, pageSize: PAGE_SIZE, view: 'p1' })
+  ]).then(function (out) {
+    var sc = out[0];
     state.schema = sc;
     sc.fields.forEach(function (f) { state.types[f.label] = f.type; });
     var bar = Filters.create($('filters'), sc, {
@@ -26,7 +32,9 @@
       }
     });
     state.filters = bar.get();
-    load();
+    if (seq !== state.seq) return;
+    state.res = out[1];
+    render(out[1]);
   }).catch(function (err) {
     UI.error(box, err, function () { location.reload(); });
   });
