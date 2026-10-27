@@ -56,6 +56,7 @@ assets/js/schema-defaults.js  필드·양식·템플릿 초기값 (가짜 예시
 assets/js/ui.js · filters.js · charts.js · mock-data.js · 화면별 js
 tests/                     node --test
 scripts/                   복사·검사·로컬 서버·미리보기·브라우저 확인 (Node 내장 기능만)
+                           push.js 는 소유자 PC 의 clasp 로 백엔드를 올리는 도우미 (백엔드가 있을 때만)
 ```
 
 화면은 데이터를 `textContent`로만 그립니다 (`innerHTML` 금지 — `node scripts/check.js`가 확인).

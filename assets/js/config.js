@@ -6,7 +6,7 @@
 var CONFIG = {
   APP_NAME: '호호모빌리티 백오피스',
   // ① 관리 웹앱 주소 (배포 → 웹 앱 URL, https://script.google.com/macros/s/…/exec)
-  API_URL: '',
+  API_URL: 'https://script.google.com/macros/s/AKfycbzArLA2yYN7xwgLxtVFW_WksSPe5CGbN9Xle0AIyk1AfvRQa9fA1CFTfIKjKikuXLfH/exec',
   // ② 입력 웹앱 주소 (메뉴 '입력 ↗' 가 새 탭으로 연다)
-  INPUT_URL: ''
+  INPUT_URL: 'https://script.google.com/macros/s/AKfycbzbGtG-Wa7LgaAKOW-JF8eZpg27quYXtdJFpMznIcX0Y2pJN9wAA_5y4I-TXeFPeEe9LQ/exec'
 };
